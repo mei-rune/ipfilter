@@ -174,6 +174,9 @@ func (f *IPFilter) Wrap(next http.Handler) http.Handler {
 
 //Wrap is equivalent to NewLazy(opts) then Wrap(next)
 func Wrap(next http.Handler, opts Options) http.Handler {
+	if len(opts.AllowedIPs) == 0 && len(opts.BlockedIPs) == 0 && !opts.BlockByDefault {
+		return next
+	}
 	return New(opts).Wrap(next)
 }
 
