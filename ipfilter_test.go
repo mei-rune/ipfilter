@@ -4,7 +4,7 @@ import (
 	"net"
 	"testing"
 
-	"github.com/jpillora/ipfilter"
+	"github.com/runner-mei/ipfilter"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -33,34 +33,4 @@ func TestSubnetIP(t *testing.T) {
 	assert.True(t, f.Allowed("10.0.0.1"), "[1] should be allowed")
 	assert.True(t, f.Allowed("10.0.42.1"), "[2] should be allowed")
 	assert.True(t, f.Blocked("10.42.0.1"), "[3] should be blocked")
-}
-
-func TestManualCountryCode(t *testing.T) {
-	assert.Equal(t, ipfilter.IPToCountry(egAU), "AU")
-	assert.Equal(t, ipfilter.IPToCountry(egUS), "US")
-}
-
-func TestCountryCodeWhiteList(t *testing.T) {
-	f := ipfilter.New(ipfilter.Options{
-		AllowedCountries: []string{"AU"},
-		BlockByDefault:   true,
-	})
-	assert.True(t, f.Allowed(egAU), "[1] should be allowed")
-	assert.True(t, f.Blocked(egUS), "[2] should be blocked")
-}
-
-func TestCountryCodeBlackList(t *testing.T) {
-	f := ipfilter.New(ipfilter.Options{
-		BlockedCountries: []string{"RU", "CN"},
-	})
-	assert.True(t, f.Allowed(egAU), "[1] AU should be allowed")
-	assert.True(t, f.Allowed(egUS), "[2] US should be allowed")
-	assert.True(t, f.Blocked(egCN), "[3] CN should be blocked")
-}
-
-func TestDynamicList(t *testing.T) {
-	f := ipfilter.New(ipfilter.Options{})
-	assert.True(t, f.Allowed(egCN), "[1] CN should be allowed")
-	f.BlockCountry("CN")
-	assert.True(t, f.Blocked(egCN), "[1] CN should be blocked")
 }
