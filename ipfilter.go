@@ -36,7 +36,7 @@ type Options struct {
 }
 
 type IPFilter struct {
-	opts Options
+	opts           Options
 	defaultAllowed bool
 	ips            map[string]bool
 	subnets        []*subnet
@@ -116,7 +116,6 @@ func (f *IPFilter) toggleIP(str string, allowed bool) bool {
 	return false
 }
 
-
 //ToggleDefault alters the default setting
 func (f *IPFilter) ToggleDefault(allowed bool) {
 	f.defaultAllowed = allowed
@@ -192,12 +191,21 @@ func (m *ipFilterMiddleware) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	} else {
 		remoteIP, _, _ = net.SplitHostPort(r.RemoteAddr)
 	}
-	if remoteIP != "127.0.0.1" && remoteIP != "::1" {
-		allowed := m.IPFilter.Allowed(remoteIP)
+
+	remoteAddr := net.ParseIP(remoteIP)
+	if remoteAddr == nil {
+		//show simple forbidden text
+		m.printf("blocked %s", remoteIP)
+		http.Error(w, "ipaddr is blocked", http.StatusForbidden)
+		return
+	}
+
+	if !remoteAddr.IsLoopback() {
+		allowed := m.IPFilter.NetAllowed(remoteAddr)
 		if !allowed {
 			//show simple forbidden text
 			m.printf("blocked %s", remoteIP)
-			http.Error(w, "", http.StatusForbidden)
+			http.Error(w, "ipaddr is blocked", http.StatusForbidden)
 			return
 		}
 	}
@@ -205,12 +213,60 @@ func (m *ipFilterMiddleware) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	m.next.ServeHTTP(w, r)
 }
 
-//NewNoDB is the same as New
-func NewNoDB(opts Options) *IPFilter {
-	return New(opts)
+//Wrap is equivalent to NewLazy(opts) then Wrap(next)
+func WrapListener(l net.Listener, opts Options, onBlocked func(net.Addr)) net.Listener {
+	if len(opts.AllowedIPs) == 0 && len(opts.BlockedIPs) == 0 && !opts.BlockByDefault {
+		return l
+	}
+	return &proxyListener{
+		Listener:  l,
+		ipFilter:  New(opts),
+		OnBlocked: onBlocked,
+	}
 }
 
-//NewLazy is the same as New
-func NewLazy(opts Options) *IPFilter {
-	return New(opts)
+type proxyListener struct {
+	Listener net.Listener
+	ipFilter *IPFilter
+
+	OnBlocked func(net.Addr)
+}
+
+func (pl *proxyListener) Accept() (net.Conn, error) {
+	for {
+		conn, err := pl.Listener.Accept()
+		if err != nil {
+			return nil, err
+		}
+
+		remoteAddr := conn.RemoteAddr()
+
+		var remoteIP net.IP
+		switch addr := remoteAddr.(type) {
+		case *net.TCPAddr:
+			remoteIP = addr.IP
+		case *net.IPAddr:
+			remoteIP = addr.IP
+		}
+		if remoteIP != nil && !remoteIP.IsLoopback() {
+			allowed := pl.ipFilter.NetAllowed(remoteIP)
+			if !allowed {
+				if pl.OnBlocked != nil {
+					pl.OnBlocked(remoteAddr)
+				}
+				conn.Close()
+				continue
+			}
+		}
+		return conn, nil
+	}
+}
+
+func (pl *proxyListener) Close() error {
+	return pl.Listener.Close()
+}
+
+// Addr returns the listener's network address.
+func (pl *proxyListener) Addr() net.Addr {
+	return pl.Listener.Addr()
 }
