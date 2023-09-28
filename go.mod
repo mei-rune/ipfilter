@@ -1,4 +1,4 @@
-module github.com/runner-mei/ipfilter
+module github.com/mei-rune/ipfilter
 
 go 1.16
 
