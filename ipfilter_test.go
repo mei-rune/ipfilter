@@ -4,7 +4,7 @@ import (
 	"net"
 	"testing"
 
-	"github.com/runner-mei/ipfilter"
+	"github.com/mei-rune/ipfilter"
 	"github.com/stretchr/testify/assert"
 )
 
